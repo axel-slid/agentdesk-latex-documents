@@ -1,0 +1,230 @@
+\documentclass[runningheads]{llncs}
+
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{verbatim}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage{float}
+
+\makeatletter
+\renewenvironment{table}
+               {\setlength\abovecaptionskip{10\p@}%
+                \setlength\belowcaptionskip{0\p@}%
+                \@float{table}}
+               {\end@float}
+\renewenvironment{table*}
+               {\setlength\abovecaptionskip{10\p@}%
+                \setlength\belowcaptionskip{0\p@}%
+                \@dblfloat{table}}
+               {\end@dblfloat}
+\makeatother
+
+\ifdefined\pdfpageattr
+\pdfpageattr{/Rotate 0}
+\fi
+
+\graphicspath{{figures/}}
+\setcounter{secnumdepth}{1}
+
+\begin{document}
+
+\title{RGB--Depth Generation for Cutaneous Neurofibroma}
+\titlerunning{RGB--Depth Generation for cNF}
+
+\author{Anonymized Author(s)}
+\authorrunning{Anonymized Author et al.}
+\institute{Anonymized Affiliation(s) \\
+    \email{email@anonymized.com}}
+
+\maketitle
+
+\begin{abstract}
+Cutaneous neurofibromas (cNFs), visible manifestations of neurofibromatosis type 1 (NF1), vary in color, boundary appearance, and protrusion, making depth important for cNF datasets. Here, we present and evaluate a pipeline for generating paired RGB and depth-map data for cNF lesions. The curated public 2D image set contains 510 unique images from 10 public sources, we then pair these images with predicted depth maps. A convolutional variational autoencoder (VAE) learns a joint $512 \times 512 \times 4$ RGB--depth representation, and a mask-guided inpainting latent diffusion model learn morphology-specific lesion insertion from controlled source/target pairs. To validate the depth prediction, we graft geometry-controlled synthetic lesions onto public 3D human-scan surfaces and render paired RGB, mask, and depth outputs for comparison with known surface geometry. The VAE achieved held-out RGB L1 0.0544 and depth L1 0.0228. Validation masked RGB/depth L1 ranged from 0.0242/0.0178 for flat lesions to 0.0620/0.0414 for globular lesions. In a downstream detector ablation, held-out Dice point estimates rose by +0.0332 for RGB and +0.0349 for RGB--D; only the RGB--D paired-bootstrap interval excluded zero.
+
+\keywords{Image synthesis \and Dermatology \and Cutaneous neurofibroma \and RGB--depth generation \and Mask-guided inpainting}
+\end{abstract}
+
+\section{Introduction}
+
+Cutaneous neurofibromas (cNFs) are dermal peripheral nerve sheath tumors and one of the most common visible manifestations of neurofibromatosis type 1 (NF1). Clinical care is shaped by lifelong surveillance and lesion tracking, to access the broader risk profile of the disease, including concern for malignant peripheral nerve sheath tumors \cite{li2023current} and increased risk of breast cancer [cite]. To access burden, cNFs are described across recognizable morphologies, including flat, sessile, globular, and pedunculated lesions \cite{ortonne2018cutaneous,li2023current}. Flat lesions spread laterally with minimal protrusion, sessile lesions rise from a broad base, globular lesions form a rounded outward bulge, and pedunculated lesions remain attached to surrounding skin through a narrower stalk-like base. These classes, indicating the protrusion from the skin, are therefore helpful indicators of lesion burden. In training AI models to access burden, considering these three-dimensional features is important because cNF burden is not fully captured by two-dimensional segmentations.
+
+Studies show the value of 3D analysis for cNF assessment \cite{thalheimer2021validating,berman2024comparing}. For example, Thalheimer et al. evaluated 3D photography and high-frequency ultrasound for repeated cNF measurement in adults with NF1, while Lau et al. compared Vectra-H1, LifeViz-Micro, and Cherry Imaging systems for measuring cNF length, surface area, and volume. However, public dermatology image collections rarely include aligned segmentation masks, morphology labels, and measured depth \cite{groh2021fitzpatrick}. This creates a data gap for algorithms that need to reason about both lesion appearance and geometry.
+
+Generative modeling can help address this scarcity by producing controlled examples with paired appearance, mask, and depth annotations. In this work, we develop a synthetic cNF generation pipeline for RGB--depth dermatology images. The pipeline combines public dermatology imagery, monocular depth estimation, derived lesion-candidate masks and morphology labels, a four-channel RGB--depth VAE, and a morphology-specific mask-guided inpainting. Given healthy skin, a guide mask, and a selected morpholog latent diffusion model. The model generates lesion appearance together with a spatially aligned depth channel for simulation and augmentation in depth-aware dermatology experiments.
+
+\section{Methods}
+
+We gathered publicly available cNF and healthy-skin images from dermatology collections and PubMed-indexed figures, and separately used public 3D body scans for controlled rendering. The curated public 2D cNF image set contains 407 unique PNG images from 10 public sources (Table~\ref{tab:data}). Public dermatology images provide variation in skin tone, lighting, and background; PubMed-indexed cNF figures provide visible examples of the target morphologies; and HumanScanRepository scans provide anatomical substrates for controlled rendering \cite{groh2021fitzpatrick,humanscanrepository}. For VAE training, the paired Fitzpatrick 17k subset was resized to $512 \times 512$ pixels. Depth Pro, a monocular model for dense depth prediction from a single RGB image, was used to produce relative depth maps for each VAE crop \cite{bochkovskii2024depth}. Each RGB crop was then paired with its normalized depth map to create a four-channel $512 \times 512 \times 4$ RGB--depth representation.
+
+For the VAE reconstruction branch, the paired Fitzpatrick 17k subset contained 189 images split into 151 training, 19 validation, and 19 test images. Splits were created before model fitting so that held-out images remained separate during checkpoint selection. For the geometry-controlled inpainting branch, rendered source and target pairs were split separately by morphology. This produces a common representation for reconstruction, lesion insertion, and rendered-surface evaluation.
+
+The public-image set was audited at the image level before model training. It contains 407 unique PNG images with source provenance and duplicate checks based on image and original-file hashes. Table~\ref{tab:data} reports source-level image counts, not disease prevalence and not independently adjudicated clinical lesion counts.
+
+\noindent\textbf{Data-use declaration.}
+All 2D images and 3D scans used in this study came from public sources listed in Table~\ref{tab:data}. No institutional private patient images were added, so no local IRB protocol number applies. Source-specific licenses and access terms must be respected for any redistribution of derived images, masks, or generated examples; the curation records include non-commercial terms, unknown or unspecified licenses, row-level ISIC licenses, and article-specific PubMed/PMC terms.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.90\textwidth]{fig_public_rgb_depth_example.png}
+\caption{Public 2D RGB--depth example showing source RGB, red lesion outlines from a manual polygon mask, and close-is-light Depth Pro pseudo-depth with the same lesion outlines.}
+\label{fig:public-rgb-depth}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}p{0.76\textwidth}r@{}}
+\toprule
+Source & Count \\
+\midrule
+danielfdias98/derm-reasoning-cot \cite{dermReasoningCot} & 123 \\
+Fitzpatrick17k \cite{groh2021fitzpatrick} & 86 \\
+Muzmmillcoste/dermnet \cite{dermnetImages} & 68 \\
+SD-198 Hugging Face mirror \cite{sun2016sd198} & 60 \\
+ISIC Archive \cite{isicArchive} & 26 \\
+rkdeva/DermnetSkinData-Test12 \cite{dermnetImages} & 19 \\
+JDD Inclusive Derm Atlas \cite{jddInclusiveDermAtlas} & 12 \\
+PubMed Vibe \cite{zhao2026malignant,kotan2026frameshift,anyfanti2026necrotizing,chen2026leiomyosarcoma,zhang2026arterial,garg2026plexiform,idrissova2026giant} & 8 \\
+SCIN \cite{ward2024scin} & 3 \\
+DermaCon-IN \cite{madarkar2025dermacon} & 2 \\
+\midrule
+Total & 407 \\
+\bottomrule
+\end{tabular}
+\caption{Public 2D cNF image sources. Counts are unique PNG files in the curated image set.}
+\label{tab:data}
+\end{table}
+
+The first model stage learns a compact representation of paired appearance and geometry. We trained a convolutional VAE \cite{kingma2014auto} as an image-to-image reconstruction model for paired RGB and depth-map inputs. The model receives a four-channel $512 \times 512 \times 4$ tensor, where the first three channels are RGB and the fourth channel is the normalized depth map, and reconstructs the same four-channel representation. By forcing RGB and depth to be reconstructed together, the VAE provides a reconstruction baseline and a latent-space variant for lesion inpainting. The objective combined RGB and depth reconstruction terms with KL regularization, and the checkpoint was selected by validation loss.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{01_vae_rgb_depth_pipeline.png}
+\caption{RGB--depth VAE pipeline. RGB crops and Depth Pro pseudo-depth maps are paired into four-channel inputs for VAE training and reconstruction.}
+\label{fig:vae-pipeline}
+\end{figure}
+
+The second model stage synthesizes lesions rather than merely reconstructing existing crops. We trained mask-guided inpainting models with a diffusion-style U-Net backbone and time embeddings \cite{ho2020denoising,rombach2022high}; the model reported here uses a supervised masked source-to-target objective on controlled RGB--depth pairs. We evaluated both VAE-latent and direct RGB--D variants in the geometry-controlled validation, because the VAE latent path is not assumed to be optimal. Separate morphology-specific models were trained for flat, sessile, globular, and pedunculated lesions. The input is a healthy RGB--depth crop plus a binary guide mask that specifies where the lesion should be created, and the target is the corresponding rendered lesion crop. The output is an inpainted RGB image and an aligned depth map. The loss was applied inside the guide region, and source pixels were preserved outside the mask.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{02_mask_guided_diffusion_pipeline.png}
+\caption{Mask-guided diffusion inpainting pipeline. A healthy RGB--depth crop, guide mask, and morphology condition are used to synthesize a target RGB--depth lesion crop.}
+\label{fig:diffusion-pipeline}
+\end{figure}
+
+For validation of the depth branch, we constructed a 3D synthetic dataset with known insertion sites and ground-truth render depth. Data generation used two public HumanScanRepository body scans as 3D substrates \cite{humanscanrepository}. Candidate lesion sites were sampled on visible skin regions after excluding clothing and boundary artifacts. Lesions were inserted as sphere- and ellipsoid-like surface perturbations, colored by local skin interpolation, and rendered to paired RGB images, masks, and depth maps. The final raycast set contained 512 flat, 512 sessile, 177 globular, and 228 pedunculated source/target pairs. This branch is intentionally controlled rather than photorealistic: it provides known masks and depth maps for validation of RGB--depth preservation under lesion insertion.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.84\textwidth]{fig_synthetic_generation_examples.png}
+\caption{Geometry-controlled synthetic data generation examples arranged as a 2$\times$2 morphology grid with flat and sessile lesions on the top row and globular and pedunculated lesions on the bottom row; each morphology cell contains target RGB, RGB with red lesion outline, and close-is-light depth with the same outline.}
+\label{fig:synthetic-generation}
+\end{figure}
+
+\section{Results}
+
+VAE evaluation tested whether the latent space preserved paired RGB--depth structure in held-out cNF crops. The selected checkpoint occurred at epoch 100, with validation loss 0.0705. Held-out test loss was 0.0795, with RGB L1 0.0544, depth L1 0.0228, RGB MSE 0.00542, depth MSE 0.00116, and KL 7.481. Visual inspection of held-out reconstructions showed preservation of global skin color and coarse depth layout, with smoothing of high-frequency lesion texture.
+
+The controlled synthesis task tested mask-guided insertion of a morphology-specific RGB--depth lesion into a healthy source crop. Because each source crop has a paired rendered target, the evaluation uses known masks and depth maps rather than subjective visual scoring alone. Figure~\ref{fig:synthetic-generation} shows representative held-out target RGB, lesion-outline, and depth triplets. We therefore treat these experiments as controlled RGB--depth preservation tests, not as evidence of clinical photorealism. Failure modes differed by morphology: flat lesions required subtle color and low-amplitude depth, sessile and globular lesions required coherent protrusion, and pedunculated lesions required stalk continuity.
+
+Inpainting metrics tested whether each morphology-specific model inserted the controlled RGB--depth target while preserving the surrounding crop. Table~\ref{tab:inpaint} summarizes the validation metrics by morphology, and Figure~\ref{fig:generation-examples} shows representative held-out generation examples.
+
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Morphology & Split $n$ & Epoch & Loss & RGB L1 & Depth L1 \\
+\midrule
+Flat & 410/51/51 & 30 & 0.0420 & 0.0242 & 0.0178 \\
+Sessile & 410/51/51 & 30 & 0.0642 & 0.0393 & 0.0249 \\
+Globular & 141/18/18 & 29 & 0.1034 & 0.0620 & 0.0414 \\
+Pedunculated & 182/23/23 & 15 & 0.0874 & 0.0446 & 0.0428 \\
+\bottomrule
+\end{tabular}
+\caption{Best validation metrics for morphology-specific mask-guided inpainting. Split counts are train/validation/test.}
+\label{tab:inpaint}
+\end{table}
+
+
+Flat lesions had the lowest validation error, with masked RGB L1 0.0242 and masked depth L1 0.0178. Sessile lesions had RGB L1 0.0393 and depth L1 0.0249; globular lesions had 0.0620 and 0.0414; and pedunculated lesions had 0.0446 and 0.0428.
+
+For geometry-controlled validation, 72 held-out body-scan renderings were evaluated, with 18 examples per morphology. Direct RGB--D inpainting achieved aggregate RGB MAE 0.0928 and depth MAE 0.0883, close to the source baseline of 0.0893 and 0.0895. Latent VAE inpainting was less accurate on this geometry-controlled test, with RGB MAE 0.1379 and depth MAE 0.1808. The largest difference occurred for pedunculated lesions, where latent inpainting had depth MAE 0.2544 compared with 0.1748 for direct RGB--D inpainting. Because the rendered lesions are small, the healthy-source baseline is a perturbation lower bound rather than a generative model; these metrics therefore mainly test whether inpainting preserves controlled RGB--depth structure.
+
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrrrr}
+\toprule
+Model & RGB & Depth & RGB grad. & Depth grad. \\
+\midrule
+Source baseline & 0.0893 & 0.0895 & 0.0301 & 0.0215 \\
+Latent VAE inpainting & 0.1379 & 0.1808 & 0.0407 & 0.0350 \\
+Direct RGB--D inpainting & 0.0928 & 0.0883 & 0.0272 & 0.0214 \\
+\bottomrule
+\end{tabular}
+\caption{Masked geometry-controlled validation on held-out body-scan renderings. Lower values are better.}
+\label{tab:hsr}
+\end{table}
+
+To test downstream utility, we trained a crop-level cNF detector under four conditions: RGB, RGB--D, RGB+generated, and RGB--D+generated. This ablation tests whether generated raycast lesions change held-out lesion-mask segmentation and whether explicit pseudo-depth supervision adds value beyond RGB alone. The downstream task used lesion-centered real RGB--D crops with 512 training crops and 53 held-out validation crops. Generated augmentation added 512 balanced raycast crops, 128 per morphology. All detector conditions used the same architecture family, loss, threshold, and training schedule. Uncertainty was estimated by paired bootstrap over validation crops with 10,000 resamples.
+
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Condition & Train $n$ & Gen. $n$ & Dice & IoU & Prec. & Recall \\
+\midrule
+RGB & 512 & 0 & 0.5515 & 0.3807 & 0.4955 & 0.6217 \\
+RGB+generated & 1024 & 512 & 0.5852 & 0.4136 & 0.4807 & 0.7476 \\
+RGB--D & 512 & 0 & 0.5434 & 0.3731 & 0.4504 & 0.6848 \\
+RGB--D+generated & 1024 & 512 & 0.5782 & 0.4067 & 0.4719 & 0.7463 \\
+\bottomrule
+\end{tabular}
+\caption{Held-out real validation metrics for the downstream crop-level cNF detector ablation.}
+\label{tab:downstream}
+\end{table}
+
+Generated augmentation increased held-out real-crop segmentation point estimates in both RGB and RGB--D settings. RGB+generated achieved the best Dice score, 0.5852, compared with 0.5515 for RGB alone. RGB--D+generated reached Dice 0.5782, compared with 0.5434 for RGB--D alone. Paired bootstrap Dice gains were +0.0332 for RGB augmentation (95\% CI $-0.0187$ to 0.0879) and +0.0349 for RGB--D augmentation (95\% CI 0.0011 to 0.0694), so the RGB--D augmentation interval excluded zero whereas the RGB interval did not. Generated augmentation also increased recall from 0.6217 to 0.7476 in RGB and from 0.6848 to 0.7463 in RGB--D.
+
+\section{Discussion}
+
+This work frames cNF synthesis as a paired appearance-and-geometry problem rather than a purely two-dimensional image-generation task. The pipeline links public cNF imagery, derived masks and labels, pseudo-depth maps, and controlled body-scan renderings into a common RGB--depth representation for synthesis, mask-based evaluation, and detector ablation.
+
+The downstream ablation suggests that generated lesion augmentation can improve crop-level cNF segmentation, with the clearest effect on recall. RGB--D did not outperform RGB in this setting; this is consistent with the use of pseudo-depth rather than measured surface depth, and with the small held-out validation set. The most defensible finding is therefore the matched-split generated-augmentation gain, with stronger bootstrap support in the RGB--D setting.
+
+Several limitations should shape interpretation. Depth Pro maps are pseudo-depth estimates; public images may overrepresent visually striking lesions; and 3D grafts use simplified sphere and ellipsoid primitives. Public-image labels and downstream masks are AI-derived, and the detector is a crop-level prototype rather than a full clinical validation. These constraints support use of the system as a synthesis and augmentation pipeline, not as evidence for clinical deployment; future work should add measured 3D surface data and external expert quality control.
+
+\section{Conclusion}
+
+Overall, the results support paired RGB--depth cNF generation as a practical foundation for geometry-aware dermatology experiments. Generated augmentation improved downstream segmentation point estimates, and the RGB--D augmentation comparison had the strongest bootstrap support, motivating further validation with measured 3D surface data.
+
+\bibliographystyle{splncs04}
+\bibliography{references}
+
+\appendix
+\section{VAE Settings}
+The RGB--depth VAE used four-channel $512^2$ inputs, four latent channels, base width 32, and 9.73M parameters. The paired Fitzpatrick RGB--Depth Pro tensor set contained 189 crops split into 151/19/19 train/validation/test examples. Training used AdamW, mixed precision, batch size 8, 100 epochs, learning rate $2\times10^{-4}$, weight decay $10^{-4}$, gradient clipping at 1.0, and seed 20260624. Loss weights were RGB L1 1, depth L1 1, MSE 0.25, and KL $10^{-4}$; checkpoint selection used validation loss.
+
+\section{Diffusion Settings}
+The morphology-specific mask-guided diffusion/inpainting experiments used four 12.65M-parameter mask-aware U-Nets at $256^2$ resolution. Each model used four latent channels, four mask channels, base width 64, channel multipliers 1/2/4, two residual blocks per level, time-embedding dimension 256, dropout 0.05, and the synthetic-raycast VAE checkpoint for RGB--depth encoding. The reported runs used source-flow initialization, source preservation outside the guide mask, masked loss weight 1, unmasked loss weight 0, latent-flow loss weight 0, and downstream RGB/depth loss weights 1/1. Training used AdamW, mixed precision, batch size 4, 30 epochs, learning rate and weight decay $10^{-4}$, gradient clipping at 1.0, and seed 20260624.
+
+\section{Detector Settings}
+The downstream detector used a $128^2$ three-level GN/SiLU U-Net trained with BCE+Dice loss. The real crop split contained 512 training and 53 validation crops; generated augmentation added 512 raycast crops, balanced as 128 per morphology. Training used batch size 32, 35 epochs, learning rate $3\times10^{-4}$, weight decay $10^{-4}$, positive-weight cap 50, threshold 0.5, mixed precision, gradient clipping at 1.0, and seed 20260628.
+
+\section{HSR Scan Generation Settings}
+The controlled HSR branch used a 7000-render close-up RGB/depth set built from HSR0018-Body-070 and HSR0152-Body-090 across front, back, face, arms, hands, legs, and feet. Source renders used randomized lesion-centered cameras, $256^2$ RGB and camera-$z$ depth, 10--100 mixed-morphology lesions per render, and a parameterized mixed-morphology growth model.
+
+The paired healthy-to-lesion set was curated by re-rendering the same HSR scan, camera, and lighting without lesions, then copying only the raycast-visible target lesion region from the lesion render into the healthy render. Curation used seed 20260624, image size 256, mask margin 1.75, raycast mask mode, candidate multiplier 4, and requested caps flat:512, sessile:512, globular:256, pedunculated:301. The accepted raycast set contained 512 flat, 512 sessile, 177 globular, and 228 pedunculated pairs, split as 410/51/51, 410/51/51, 141/18/18, and 182/23/23. Raycast masks used visible lesion-mesh hits with 336 faces per lesion and a 0.0025 m depth tolerance; source and target depth were normalized together before saving four-channel RGB--depth arrays. The HSR validation subset used 72 held-out test renderings, balanced at 18 examples per morphology, and was evaluated at $128^2$ resolution.
+
+\end{document}

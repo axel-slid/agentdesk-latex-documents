@@ -1,0 +1,192 @@
+\documentclass[runningheads]{llncs}
+
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+
+\makeatletter
+\renewenvironment{table}
+               {\setlength\abovecaptionskip{10\p@}%
+                \setlength\belowcaptionskip{0\p@}%
+                \@float{table}}
+               {\end@float}
+\renewenvironment{table*}
+               {\setlength\abovecaptionskip{10\p@}%
+                \setlength\belowcaptionskip{0\p@}%
+                \@dblfloat{table}}
+               {\end@dblfloat}
+\makeatother
+
+\begin{document}
+
+\title{Supplementary Material: RGB--Depth Generation for Cutaneous Neurofibroma}
+\titlerunning{Supplementary Material}
+
+\author{Anonymized Author(s)}
+\authorrunning{Anonymized Author et al.}
+\institute{Anonymized Affiliation(s)}
+
+\maketitle
+
+\appendix
+
+\section{Model Settings}
+
+All neural-network experiments used the training settings summarized below.
+
+\begin{table}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.42\textwidth}>{\raggedright\arraybackslash}p{0.46\textwidth}}
+\toprule
+Setting & Value \\
+\midrule
+Input & RGB--depth crop \\
+Split & 151/19/19 train/validation/test \\
+Training resolution & $512 \times 512$ \\
+Latent channels & 4 \\
+Base channels & 32 \\
+Parameters & 9,728,332 \\
+Objective & RGB/depth reconstruction plus KL \\
+Loss weights & RGB 1, depth 1, MSE 0.25, KL $10^{-4}$ \\
+Optimizer & AdamW \\
+Learning rate & $2\times10^{-4}$ \\
+Weight decay & $10^{-4}$ \\
+Batch size & 8 \\
+Training schedule & 100 epochs \\
+Gradient clipping & 1.0 \\
+Precision & Mixed precision \\
+Seed & 20260624 \\
+Checkpoint selection & Validation loss \\
+\bottomrule
+\end{tabular}
+\caption{Training settings for the four-channel VAE.}
+\label{tab:vae-settings}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.42\textwidth}>{\raggedright\arraybackslash}p{0.46\textwidth}}
+\toprule
+Setting & Value \\
+\midrule
+Input & RGB--depth crop plus guide mask \\
+Split & Morphology-specific splits in main Table 2 \\
+Training resolution & $256 \times 256$ \\
+Latent channels & 4 \\
+Mask channels & 4 \\
+Base channels & 64 \\
+Residual blocks per level & 2 \\
+Time embedding & 256 dimensions \\
+Dropout & 0.05 \\
+Parameters & 12,653,316 \\
+Objective & Masked source-to-target RGB/depth loss \\
+Loss weights & Masked 1, unmasked 0, RGB 1, depth 1, latent 0 \\
+Outside mask & Source preserved outside mask \\
+Optimizer & AdamW \\
+Learning rate & $10^{-4}$ \\
+Weight decay & $10^{-4}$ \\
+Batch size & 4 \\
+Training schedule & 30 epochs \\
+Gradient clipping & 1.0 \\
+Precision & Mixed precision \\
+Seed & 20260624 \\
+Checkpoint selection & Validation loss \\
+\bottomrule
+\end{tabular}
+\caption{Training settings for mask-guided inpainting.}
+\label{tab:inpainting-settings}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{ll}
+\toprule
+Setting & Value \\
+\midrule
+Architecture & Three-level U-Net with GroupNorm and SiLU blocks \\
+Input channels & 3 for RGB, 4 for RGB--D \\
+Input resolution & $128 \times 128$ \\
+Base channels & 24 \\
+Loss & Weighted binary cross-entropy with logits plus Dice loss \\
+Positive-weight cap & 50.0 \\
+Optimizer & AdamW \\
+Learning rate & $3\times10^{-4}$ \\
+Weight decay & $10^{-4}$ \\
+Batch size & 32 \\
+Training schedule & 35 epochs \\
+Decision threshold & 0.5 \\
+Validation set & 53 held-out real crops \\
+Synthetic augmentation & 512 crops, 128 per morphology \\
+Seed & 20260628 \\
+\bottomrule
+\end{tabular}
+\caption{Downstream detector settings used for the crop-level ablation.}
+\label{tab:detectorsettings}
+\end{table}
+
+\clearpage
+
+\section{Supplementary Figures}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/supp_model_workflows.png}
+\caption{Model workflow schematics. The VAE reconstructs paired RGB and depth maps from a four-channel input, while the mask-guided inpainting runs use a source RGB--depth crop and guide mask to predict an RGB--depth lesion inside the requested region. Morphology is handled by separate class-specific runs.}
+\label{fig:supp-model-workflows}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/supp_raycast_examples.png}
+\caption{Lesion-centered examples from the geometry-controlled raycast branch. Rows show one rendered target for each morphology with its binary lesion mask and render-depth map. Depth is contrast-normalized within each crop for visualization, with light values displayed as closer.}
+\label{fig:supp-raycast-examples}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/vae_test_reconstruction_progress_clean.png}
+\caption{Held-out VAE reconstruction progression for one representative cNF crop. Columns show test RGB, reconstructed RGB, test pseudo-depth, and reconstructed pseudo-depth at selected checkpoints.}
+\label{fig:supp-vae-progress}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/downstream_ablation_training_curves.png}
+\caption{Training loss and validation Dice curves for the downstream detector ablation. All four detector conditions used the same split, architecture family, threshold, and training schedule.}
+\label{fig:supp-downstream-curves}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{RGB MAE} & \multicolumn{3}{c}{Depth MAE} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Morphology & Source & Latent & Direct & Source & Latent & Direct \\
+\midrule
+Flat & 0.0509 & 0.1368 & 0.0511 & 0.0133 & 0.1214 & 0.0152 \\
+Sessile & 0.0830 & 0.1388 & 0.0939 & 0.0905 & 0.1379 & 0.0895 \\
+Globular & 0.0892 & 0.1241 & 0.1024 & 0.0735 & 0.2096 & 0.0735 \\
+Pedunculated & 0.1341 & 0.1518 & 0.1238 & 0.1806 & 0.2544 & 0.1748 \\
+\bottomrule
+\end{tabular}
+\caption{Per-morphology geometry-controlled validation on body-scan renderings. Each row uses 18 held-out examples; metrics are averaged inside the raycast lesion mask and lower values are better.}
+\label{tab:supp-hsr-morphology}
+\end{table}
+
+\end{document}
